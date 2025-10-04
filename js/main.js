@@ -1,5 +1,5 @@
 // /js/main.js — v2025-09-30 (DF obligatoria + placeholder)
-import './print.js?v=2025-09-09c';
+import './print.js?v=2025-10-04-ifr';
 import { sanitizePrice, parseMoney } from './utils.js';
 import { obtenerNumeroTrabajoDesdeTelefono } from './numeroTrabajo.js';
 import { cargarFechaHoy } from './fechaHoy.js';
