@@ -1,3 +1,5 @@
+console.log('print.js v2025-10-04-ifr (iframe universal) cargado');
+
 // /js/print.js — v2025-10-04 (iframe universal + “Descuento” estilado + fecha dd/mm/aaaa + localidad)
 // Basado en tu v2025-09-20b, pero sin window.open (siempre iframe) y con la fila de Descuento ajustada.
 (function () {
