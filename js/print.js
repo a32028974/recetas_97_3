@@ -302,76 +302,80 @@ console.log('print.js v2025-10-04-ifr (iframe universal) cargado');
   }
 
   // ===== Impresión por iframe oculto (universal) =====
-  function printGeneric(htmlInner, numero) {
-    // 1) crear iframe oculto
-    const iframe = document.createElement('iframe');
-    iframe.className = '__print_iframe__';
-    Object.assign(iframe.style, {
-      position: 'fixed', right: '0', bottom: '0',
-      width: '0', height: '0', border: '0', visibility: 'hidden'
-    });
+  // ===== Impresión por iframe oculto (universal/Android-safe) =====
+function printGeneric(htmlInner, numero) {
+  // limpia anteriores
+  try { document.querySelectorAll('iframe.__print_iframe__').forEach(n => n.remove()); } catch {}
 
-    // 2) armar documento completo (CSS + HTML)
-    const docHTML = `
-      <!doctype html><html><head><meta charset="utf-8">
-        <link rel="preload" as="image" href="${QR_SRC}?v=2">
-        <link rel="preload" as="image" href="${LOGO_SRC}?v=1">
-        ${commonCSS()}
-      </head><body>${htmlInner}</body></html>`;
+  // 1) crear iframe "visible" pero transparente (Android necesita tamaño real)
+  const iframe = document.createElement('iframe');
+  iframe.className = '__print_iframe__';
+  Object.assign(iframe.style, {
+    position: 'fixed',
+    top: '0', left: '0',
+    width: '100vw', height: '100vh',   // tamaño real
+    border: '0',
+    opacity: '0',                      // invisible visualmente
+    pointerEvents: 'none',             // no interacciona
+    // ¡NO usar visibility:hidden! hace que Android imprima la ventana madre
+  });
 
-    // usar srcdoc si existe; si no, escribir luego
-    const canSrcdoc = 'srcdoc' in iframe;
-    if (canSrcdoc) iframe.srcdoc = docHTML;
+  // 2) documento completo (CSS + HTML del ticket)
+  const docHTML = `
+    <!doctype html><html><head><meta charset="utf-8">
+      <link rel="preload" as="image" href="${QR_SRC}?v=2">
+      <link rel="preload" as="image" href="${LOGO_SRC}?v=1">
+      ${commonCSS()}
+    </head><body>${htmlInner}</body></html>`;
 
-    // insertar en DOM
-    document.body.appendChild(iframe);
+  const canSrcdoc = 'srcdoc' in iframe;
+  if (canSrcdoc) iframe.srcdoc = docHTML;
 
-    const onFrameReady = () => {
-      const w = iframe.contentWindow;
-      const doc = w.document;
+  document.body.appendChild(iframe);
 
-      // fallback si no hay srcdoc
-      if (!canSrcdoc) {
-        doc.open(); doc.write(docHTML); doc.close();
-      }
+  const onFrameReady = () => {
+    const w = iframe.contentWindow;
+    const doc = w.document;
 
-      const render = async () => {
-        try {
-          // código de barras
-          const svg = doc.getElementById('barcode');
-          if (w.JsBarcode && svg) {
-            w.JsBarcode(svg, String(numero || ''), { format: 'CODE128', displayValue: false, margin: 0, height: 40 });
-          }
-        } catch {}
+    if (!canSrcdoc) { doc.open(); doc.write(docHTML); doc.close(); }
 
-        // esperar imágenes
-        const imgs = Array.from(doc.images || []);
-        await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => {
-          img.addEventListener('load',  res, { once: true });
-          img.addEventListener('error', res, { once: true });
-        })));
+    const render = async () => {
+      // barcode si está
+      try {
+        const svg = doc.getElementById('barcode');
+        if (w.JsBarcode && svg) {
+          w.JsBarcode(svg, String(numero || ''), { format: 'CODE128', displayValue: false, margin: 0, height: 40 });
+        }
+      } catch {}
 
-        // dos rAF para asegurar layout aplicado
-        await new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(r)));
+      // esperar imágenes
+      const imgs = Array.from(doc.images || []);
+      await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => {
+        img.addEventListener('load',  res, { once: true });
+        img.addEventListener('error', res, { once: true });
+      })));
 
-        try { w.focus(); w.print(); } catch {}
-        setTimeout(() => { try { iframe.remove(); } catch {} }, 1200);
-      };
+      // asegurar layout aplicado
+      await new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(r)));
 
-      // cargar JsBarcode si no está
-      if (w.JsBarcode) render();
-      else {
-        const s = doc.createElement('script');
-        s.src = 'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js';
-        s.onload = render;
-        doc.head.appendChild(s);
-      }
+      try { w.focus(); w.print(); } catch {}
+      // retirar después (no inmediatamente para no cortar el spool)
+      setTimeout(() => { try { iframe.remove(); } catch {} }, 1200);
     };
 
-    // onload del iframe
-    if (canSrcdoc) iframe.onload = onFrameReady;
-    else setTimeout(onFrameReady, 0);
-  }
+    if (w.JsBarcode) render();
+    else {
+      const s = doc.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js';
+      s.onload = render;
+      doc.head.appendChild(s);
+    }
+  };
+
+  if (canSrcdoc) iframe.onload = onFrameReady;
+  else setTimeout(onFrameReady, 0);
+}
+
 
   // ===== API pública =====
   window.__buildPrintArea = function () {
