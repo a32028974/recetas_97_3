@@ -195,7 +195,12 @@
       <div class="box">
         <div class="box-t">Productos</div>
         <div class="kv"><div class="k">Cristal</div><div class="v">${safe(d.cristal)} — <strong>${d.precio_cristal}</strong></div></div>
-        ${d.showObra ? `<div class="kv"><div class="k">${safe(d.obraLabel)}</div><div class="v">− ${d.desc_obra}</div></div>` : ''}
+        ${d.showObra ? `
+  <div class="kv">
+    <div class="k">Descuento</div>
+    <div class="v"><strong style="font-size:1.05em">${safe(d.obraLabel)} — ${d.desc_obra}</strong></div>
+  </div>` : ''}
+
         <div class="kv"><div class="k">Armazón</div><div class="v">#${safe(d.n_armazon)} • ${safe(d.det_armazon)} — <strong>${d.precio_armazon}</strong></div></div>
         ${d.showOtro ? `<div class="kv"><div class="k">${safe(d.otroLabel)}</div><div class="v">${d.precio_otro}</div></div>` : ''}
       </div>
