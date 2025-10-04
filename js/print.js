@@ -202,7 +202,12 @@
         </div>` : ''}
 
         <div class="kv"><div class="k">Armazón</div><div class="v">#${safe(d.n_armazon)} • ${safe(d.det_armazon)} — <strong>${d.precio_armazon}</strong></div></div>
-        ${d.showOtro ? `<div class="kv"><div class="k">${safe(d.otroLabel)}</div><div class="v">${d.precio_otro}</div></div>` : ''}
+        ${d.showOtro ? `
+  <div class="kv">
+    <div class="k">Otro</div>
+    <div class="v"><strong style="font-size:1.05em">${safe(d.otroLabel)} — ${d.precio_otro}</strong></div>
+  </div>` : ''}
+
       </div>
 
       <div class="totals">
