@@ -293,7 +293,45 @@
       .right .r-qr img{ width:34mm; height:34mm; object-fit:contain; }
     </style>`;
   }
+// === helper universal: imprime HTML en iframe oculto y lo cierra solo ===
+function printHTMLInHiddenIframe(html, { onDone } = {}) {
+  // Limpieza previa
+  try { document.querySelectorAll('iframe.__print_iframe__').forEach(f => f.remove()); } catch {}
 
+  const iframe = document.createElement('iframe');
+  iframe.className = '__print_iframe__';
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  iframe.srcdoc = html;
+
+  iframe.onload = () => {
+    const w = iframe.contentWindow;
+    const doc = w.document;
+
+    const allImagesLoaded = () => {
+      const imgs = Array.from(doc.images || []);
+      if (!imgs.length) return true;
+      return imgs.every(img => img.complete);
+    };
+
+    const ensureReady = () => {
+      if (!allImagesLoaded()) { setTimeout(ensureReady, 120); return; }
+      try { w.focus(); } catch {}
+      try { w.print(); } catch {}
+      setTimeout(() => { try { iframe.remove(); } catch {}; try { onDone?.(); } catch {}; }, 1200);
+    };
+
+    w.requestAnimationFrame(() => w.requestAnimationFrame(ensureReady));
+  };
+
+  document.body.appendChild(iframe);
+}
+
+  
   // ===== Print =====
   function printGeneric(htmlInner, numero) {
     const css = commonCSS();
@@ -346,7 +384,25 @@
   }
 
   // ===== API pública =====
-  window.__buildPrintArea = function () {
+  // Genera el HTML (tu ticket A4/talón) y manda a imprimir SIEMPRE por iframe
+window.__buildPrintArea = function () {
+  // estas funciones ya existen en tu print.js:
+  // - collectForm() → junta los datos del form
+  // - renderTicket(d) → arma el HTML del ticket
+  // - commonCSS() → CSS inline de impresión
+
+  const d = collectForm();               // datos actuales del form
+  const html =
+    '<!DOCTYPE html><html><head><meta charset="utf-8">' +
+    commonCSS() +
+    '</head><body>' +
+    renderTicket(d) +
+    '</body></html>';
+
+  // imprime por iframe oculto (sin window.open, sin about:blank)
+  printHTMLInHiddenIframe(html);
+};
+PrintArea = function () {
     const d = collectForm();
     const html = renderTicket(d);
     printGeneric(html, d.numero);
