@@ -1,7 +1,4 @@
-console.log('print.js v2025-10-04-ifr (iframe universal) cargado');
-
-// /js/print.js — v2025-10-04 (iframe universal + “Descuento” estilado + fecha dd/mm/aaaa + localidad)
-// Basado en tu v2025-09-20b, pero sin window.open (siempre iframe) y con la fila de Descuento ajustada.
+// /js/print.js — v2025-09-20b (Total final = ar+cr+otro - negativo, Seña, Saldo + Localidad)
 (function () {
   // ===== Tamaños A4 =====
   const PAGE_W_MM = 210;
@@ -12,7 +9,9 @@ console.log('print.js v2025-10-04-ifr (iframe universal) cargado');
   const BAR_W_MM = 55;
   const BAR_H_MM = 8;
 
-  const QR_SRC   = new URL('img/qr.png',   window.location.href).href;
+  const UA = navigator.userAgent || '';
+  const IS_MOBILE = /Android|iPhone|iPad|iPod/i.test(UA);
+  const QR_SRC = new URL('img/qr.png', window.location.href).href;
   const LOGO_SRC = new URL('img/logo.png', window.location.href).href;
 
   // ===== Helpers =====
@@ -76,7 +75,7 @@ console.log('print.js v2025-10-04-ifr (iframe universal) cargado');
       return d ? ddmmyyyy(d) : getSelText($('fecha_retira'));
     })();
 
-    const obraLabel = getSelText($('obra_social'));     // texto del concepto negativo (ej: OSDE 410)
+    const obraLabel = getSelText($('obra_social'));     // texto del concepto negativo
     const otroLabel = getSelText($('otro_concepto'));   // texto del "otro"
 
     // montos crudos desde inputs
@@ -96,7 +95,9 @@ console.log('print.js v2025-10-04-ifr (iframe universal) cargado');
 
     // flags para mostrar/ocultar filas
     const showOtro = pOtro > 0 && otroLabel.trim().length > 0;
-    const showObra = pNeg  > 0 && obraLabel.trim().length > 0;
+// Mostrar “Descuento” si HAY TEXTO o si hay importe
+const showObra = (obraLabel.trim().length > 0) || (pNeg > 0);
+
 
     return {
       // visibles
@@ -107,7 +108,7 @@ console.log('print.js v2025-10-04-ifr (iframe universal) cargado');
       dni: getSelText($('dni')),
       nombre: getSelText($('nombre')),
       tel: getSelText($('telefono')),
-      localidad: getSelText($('localidad')),
+      localidad: getSelText($('localidad')),          // ← NUEVO
       cristal: getSelText($('cristal')),
       dr: getSelText($('dr')),
       dnp: getSelText($('dnp')),
@@ -196,20 +197,9 @@ console.log('print.js v2025-10-04-ifr (iframe universal) cargado');
       <div class="box">
         <div class="box-t">Productos</div>
         <div class="kv"><div class="k">Cristal</div><div class="v">${safe(d.cristal)} — <strong>${d.precio_cristal}</strong></div></div>
-
-        ${d.showObra ? `
-        <div class="kv">
-          <div class="k">Descuento</div>
-          <div class="v"><strong style="font-size:1.05em">${safe(d.obraLabel)} — ${d.desc_obra}</strong></div>
-        </div>` : ''}
-
+        ${d.showObra ? `<div class="kv"><div class="k">${safe(d.obraLabel)}</div><div class="v">− ${d.desc_obra}</div></div>` : ''}
         <div class="kv"><div class="k">Armazón</div><div class="v">#${safe(d.n_armazon)} • ${safe(d.det_armazon)} — <strong>${d.precio_armazon}</strong></div></div>
-        ${d.showOtro ? `
-  <div class="kv">
-    <div class="k">Otro</div>
-    <div class="v"><strong style="font-size:1.05em">${safe(d.otroLabel)} — ${d.precio_otro}</strong></div>
-  </div>` : ''}
-
+        ${d.showOtro ? `<div class="kv"><div class="k">${safe(d.otroLabel)}</div><div class="v">${d.precio_otro}</div></div>` : ''}
       </div>
 
       <div class="totals">
@@ -301,81 +291,56 @@ console.log('print.js v2025-10-04-ifr (iframe universal) cargado');
     </style>`;
   }
 
-  // ===== Impresión por iframe oculto (universal) =====
-  // ===== Impresión por iframe oculto (universal/Android-safe) =====
-function printGeneric(htmlInner, numero) {
-  // limpia anteriores
-  try { document.querySelectorAll('iframe.__print_iframe__').forEach(n => n.remove()); } catch {}
+  // ===== Print =====
+  function printGeneric(htmlInner, numero) {
+    const css = commonCSS();
+    const win = IS_MOBILE ? window.open('', '_blank') : (() => {
+      const ifr = document.createElement('iframe');
+      Object.assign(ifr.style, { position:'fixed', right:'0', bottom:'0', width:'0', height:'0', border:'0', visibility:'hidden' });
+      document.body.appendChild(ifr);
+      return ifr.contentWindow;
+    })();
 
-  // 1) crear iframe "visible" pero transparente (Android necesita tamaño real)
-  const iframe = document.createElement('iframe');
-  iframe.className = '__print_iframe__';
-  Object.assign(iframe.style, {
-    position: 'fixed',
-    top: '0', left: '0',
-    width: '100vw', height: '100vh',   // tamaño real
-    border: '0',
-    opacity: '0',                      // invisible visualmente
-    pointerEvents: 'none',             // no interacciona
-    // ¡NO usar visibility:hidden! hace que Android imprima la ventana madre
-  });
+    if (!win) { alert('Habilitá popups para imprimir'); return; }
 
-  // 2) documento completo (CSS + HTML del ticket)
-  const docHTML = `
-    <!doctype html><html><head><meta charset="utf-8">
+    const doc = win.document;
+    doc.open();
+    doc.write(`<!doctype html><html><head><meta charset="utf-8">
       <link rel="preload" as="image" href="${QR_SRC}?v=2">
       <link rel="preload" as="image" href="${LOGO_SRC}?v=1">
-      ${commonCSS()}
-    </head><body>${htmlInner}</body></html>`;
-
-  const canSrcdoc = 'srcdoc' in iframe;
-  if (canSrcdoc) iframe.srcdoc = docHTML;
-
-  document.body.appendChild(iframe);
-
-  const onFrameReady = () => {
-    const w = iframe.contentWindow;
-    const doc = w.document;
-
-    if (!canSrcdoc) { doc.open(); doc.write(docHTML); doc.close(); }
+      ${css}</head><body>${htmlInner}</body></html>`);
+    doc.close();
 
     const render = async () => {
-      // barcode si está
       try {
         const svg = doc.getElementById('barcode');
-        if (w.JsBarcode && svg) {
-          w.JsBarcode(svg, String(numero || ''), { format: 'CODE128', displayValue: false, margin: 0, height: 40 });
+        if (win.JsBarcode && svg) {
+          win.JsBarcode(svg, String(numero || ''), { format:'CODE128', displayValue:false, margin:0, height:40 });
         }
-      } catch {}
+      } catch (_) {}
 
-      // esperar imágenes
+      // esperar imágenes (logo + QR)
       const imgs = Array.from(doc.images || []);
-      await Promise.all(imgs.map(img => img.complete ? Promise.resolve() : new Promise(res => {
-        img.addEventListener('load',  res, { once: true });
-        img.addEventListener('error', res, { once: true });
-      })));
+      await Promise.all(imgs.map(img => img.complete
+        ? Promise.resolve()
+        : new Promise(res => {
+            img.addEventListener('load',  res, { once:true });
+            img.addEventListener('error', res, { once:true });
+          })
+      ));
 
-      // asegurar layout aplicado
-      await new Promise(r => w.requestAnimationFrame(() => w.requestAnimationFrame(r)));
-
-      try { w.focus(); w.print(); } catch {}
-      // retirar después (no inmediatamente para no cortar el spool)
-      setTimeout(() => { try { iframe.remove(); } catch {} }, 1200);
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      try { win.focus(); win.print(); } catch {}
     };
 
-    if (w.JsBarcode) render();
+    if (win.JsBarcode) render();
     else {
       const s = doc.createElement('script');
       s.src = 'https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js';
       s.onload = render;
       doc.head.appendChild(s);
     }
-  };
-
-  if (canSrcdoc) iframe.onload = onFrameReady;
-  else setTimeout(onFrameReady, 0);
-}
-
+  }
 
   // ===== API pública =====
   window.__buildPrintArea = function () {
